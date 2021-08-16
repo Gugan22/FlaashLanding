@@ -12,9 +12,11 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.catalina.mapper.Mapper;
 import org.apache.commons.math3.util.Precision;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -65,6 +67,7 @@ import com.zetran.acct.pojo.COAAccount;
 import com.zetran.acct.pojo.Commit;
 import com.zetran.acct.pojo.CommonTable;
 import com.zetran.acct.pojo.Journal;
+import com.zetran.acct.pojo.JournalItem;
 import com.zetran.acct.pojo.ReadAttribute;
 import com.zetran.acct.pojo.RejectRecords;
 import com.zetran.acct.pojo.SubscriptionException;
@@ -432,6 +435,15 @@ public class BankOverviewServiceImpl {
 				journ = manualJournalService.setGLHeaderLineItems(journ,null);
 				if(journ != null)
 				{
+					ObjectMapper mapper = new ObjectMapper();
+					Journal journal = new Journal();
+					List<Map<String, String>> liMaps = new ArrayList<>();
+					for(JournalItem jl : journ.getLineItem()) {
+						Map<String, String> map = new HashMap<>();
+						map = mapper.convertValue(jl, new TypeReference<Map<String, String>>() {});
+						liMaps.add(map);
+					}
+					myBooksBalanceUpdate(liMaps, "update");
 					t2 = generalLedgerService.<Journal>deleteGL(journ);
 				}
 			}
@@ -670,15 +682,20 @@ public class BankOverviewServiceImpl {
 							double mybooks_bal_amt = bankList.get(i).getMybooks_bal_amt();
 							if(methodType.equals("update") || methodType.equals("delete"))
 							{
-								double debit = Double.parseDouble(objItems.get(j).get("debit"));
-								double credit = Double.parseDouble(objItems.get(j).get("credit"));
+								double debit = 0.0;
+								double credit = 0.0;
+								
+								if(objItems.get(j).get("debit")!=null)
+								debit = Double.parseDouble(objItems.get(j).get("debit"));
+								if(objItems.get(j).get("credit")!=null)
+								credit = Double.parseDouble(objItems.get(j).get("credit"));
 								if(credit!=0)
 								{
-									mybooks_bal_amt = mybooks_bal_amt+credit;
+									mybooks_bal_amt = credit;
 								}
 								if(debit!=0)
 								{
-									mybooks_bal_amt=mybooks_bal_amt-debit;
+									mybooks_bal_amt=debit;
 								}
 								bankList.get(i).setMybooks_bal_amt(mybooks_bal_amt);
 							}
@@ -2648,6 +2665,7 @@ public class BankOverviewServiceImpl {
 		if(journalItems.size() != 0)
 		{
 			t1 = manualJournalService.createJournal(journal, journalItems, null);
+			myBooksBalanceUpdate(journalItems, "create");
 			bankObj.put("ref_doc_id",journal.getDoc_id());
 		}
 		//convert to doc_dt for store
